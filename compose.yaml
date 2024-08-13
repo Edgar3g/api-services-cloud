@@ -1,0 +1,80 @@
+
+services:
+  postgres-db:
+    container_name: postgres-books
+    volumes:
+      - ./.docker/database:/var/lib/postgres
+    image: 'postgres:latest'
+    environment:
+      POSTGRES_DB: books-db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    ports:
+      - '5432:5432'
+    networks:
+      - spring-project
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mail-dev:
+    container_name: mail-dev-books
+    image: 'maildev/maildev'
+    ports:
+      - '1080:1080'
+      - '1025:1025'
+    environment:
+      MAILDEV_INCOMING_USER: admin
+      MAILDEV_INCOMING_PASSWORD: admin
+    command: "maildev --web 1080 --smtp 1025"
+    networks:
+      - spring-project
+    restart: unless-stopped
+
+  keycloak:
+    container_name: keycloak-books
+    image: 'quay.io/keycloak/keycloak:24.0.2'
+    ports:
+      - '8080:8080'
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://postgres-db:5432/books-db
+      - KC_DB_USERNAME=admin
+      - KC_DB_PASSWORD=admin
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - spring-project
+    command:
+      - start-dev
+    restart: unless-stopped
+
+  minio:
+    container_name: minio-books
+    image: 'bitnami/minio:2022'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    networks:
+      - spring-project
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+      MINIO_DEFAULT_BUCKETS: files-bucket
+    restart: unless-stopped
+
+networks:
+  spring-project:
+    driver: bridge
+
+volumes:
+  minio_data:
+    driver: local
